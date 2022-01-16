@@ -1,27 +1,49 @@
+
+
 <html>
   <head>
     <title>CCTV Surveillance v1.0</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/main.css') }}">
   </head>
   <body>
-    <h1>Main Camera</h1>
-    <img src="{{ url_for('liveStream') }}" alt="This is CCTV video">
 
-    <form action='' method='post'>
-      <input type="submit" name="open" value="Open">
-      <input type="submit" name="close" value="Close">
-    </form>
+      
+    <div id=grad3 >
+      <div class="Logo">
+        <img id="logoImg" src="{{ url_for('static',filename='logo2.png') }}" alt="logo">
+        <span id="logoname"> CCTV Surveillance</span>
+      </div>
+    </div>
 
-    {% for record in records%}
-      <img src="{{ url_for('get_thumbnail', video_name=record.video_name) }}" alt="videothumbnail">
-      <p><a href="{{url_for('play_video',video_name=record.video_name)}}">{{record.video_name}}</a></p>
-    {% endfor%}
+    <div class="LiveStream">
+      <h1>Main Camera</h1>
+      <img src="{{ url_for('liveStream') }}" alt="This is CCTV video">
+    </div>
 
-   
+    <div class="RecordsList">
+      <h1>Detected Videos</h1>
+      {% for record in records%}
+        <div class= "VideoRecord">
+            <a href="{{url_for('play_video',video_name=record.video_name,video_id=record.id)}}">
+              <img src="{{ url_for('get_thumbnail', video_name=record.video_name) }}" alt="videothumbnail">
+              <p class="VideoRecordTitle">{{record.video_name}}</p>
+            </a>
+        </div>
+      {% endfor%}
+    </div>
+
+    <div class="VideoPlayer">
+      <h1>Selected Video</h1>
+      {% if video_name != 'data:,' %}
+        <h2>{{video_name}}</h2>
+        <button class ="VideoRecordDelete" ><a href = "{{url_for('delete_video',video_id=current_video_id)}}"> Delete</a> </button> 
+      {% endif %}
+      <video autoplay="autoplay" controls="controls" preload="preload">
+        <source src= "{{ url_for('static', filename=video_name+'.'+video_format) }}#t=0.1" type="video/{{video_format}}"></source>
+      </video> 
+    </div>
+
     
-    <video autoplay="autoplay" controls="controls" preload="preload">
-      <source src= "{{ url_for('static', filename=video_name+'.'+video_format) }}#t=0.1" type="video/{{video_format}}"></source>
-    </video>
-
-  
+    
   </body>
 </html>

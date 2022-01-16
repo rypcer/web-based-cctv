@@ -3,6 +3,8 @@ from flask_sqlalchemy import SQLAlchemy
 import datetime 
 import cv2
 import sys
+from flask_wtf import FlaskForm
+from wtforms import SubmitField, StringField
 
 
 # ====================== Variables ==================
@@ -11,6 +13,7 @@ import sys
 app = Flask(__name__,static_folder='static')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///recordings.db'
 app.config["SQLAlchemy_TRACK_MODIFICATIONS"] = False
+app.config['SECRET_KEY'] = "LetsGood"
 db = SQLAlchemy(app)
 
 
@@ -20,7 +23,14 @@ db = SQLAlchemy(app)
 camera = cv2.VideoCapture('static/vid.mp4')
 video_format = 'mp4'
 current_video = "data:,";
-initi = True;
+current_video_id = -1;
+initi = False;
+
+
+class RecordForm(FlaskForm):
+	video_id = StringField()
+	submit = SubmitField("Submit")
+
 
 # ====================== Classes ==================
 
@@ -32,34 +42,52 @@ class Record(db.Model):
 		x = datetime.datetime.now()
 		self.video_name = name+str(count)+'_'+str(x.date())+'_'+x.strftime("%H")+'.'+x.strftime("%M")+'.'+x.strftime("%S")
 
+# ===================== Routes ====================
+
 
 # Without methods in paramters, buttons cannot send data to index
 @app.route('/', methods=["POST","GET"])
 def index():
 	global current_video, initi
 	
-	if "open" in request.form:
-		print(request.form.get("open"), file=sys.stderr)
+	#if "open" in request.form:
+		
 	
 	if initi:
-		for i in range(5):
+		for i in range(4):
 			count = Record.query.count() 
 			new_record = Record("Video",count)
-			#db.session.add(new_record)
-		#db.session.commit()
+			db.session.add(new_record)
+		db.session.commit()
 		initi = False
 
+	
+	form = RecordForm()
+	if form.validate_on_submit():
+		print(form.video_id, file=sys.stderr)
 
 
 	records = Record.query.order_by(Record.id.desc()).all()
 	#print("Test: ",current_video, file=sys.stderr)
-	return render_template('index.html',video_name = current_video, video_format = video_format,records = records )
+	return render_template('index.html',form = form,video_name = current_video, current_video_id=current_video_id, video_format = video_format,records = records )
+
+
+@app.route('/delete_video/<video_id>')
+def delete_video(video_id):
+	global current_video
+	video_record = Record.query.get_or_404(video_id)
+	current_video = "data:,"
+	db.session.delete(video_record)
+	db.session.commit()
+	return redirect("/")
+
 
 # Get videoname from button link
-@app.route('/play_video/<video_name>')
-def play_video(video_name):
-	global current_video
+@app.route('/play_video/<video_name>,<video_id>')
+def play_video(video_name,video_id):
+	global current_video, current_video_id
 	current_video = video_name
+	current_video_id = video_id
 	return redirect("/")
 
 
