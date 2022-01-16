@@ -1,0 +1,27 @@
+<html>
+  <head>
+    <title>CCTV Surveillance v1.0</title>
+  </head>
+  <body>
+    <h1>Main Camera</h1>
+    <img src="{{ url_for('liveStream') }}" alt="This is CCTV video">
+
+    <form action='' method='post'>
+      <input type="submit" name="open" value="Open">
+      <input type="submit" name="close" value="Close">
+    </form>
+
+    {% for record in records%}
+      <img src="{{ url_for('get_thumbnail', video_name=record.video_name) }}" alt="videothumbnail">
+      <p><a href="{{url_for('play_video',video_name=record.video_name)}}">{{record.video_name}}</a></p>
+    {% endfor%}
+
+   
+    
+    <video autoplay="autoplay" controls="controls" preload="preload">
+      <source src= "{{ url_for('static', filename=video_name+'.'+video_format) }}#t=0.1" type="video/{{video_format}}"></source>
+    </video>
+
+  
+  </body>
+</html>
