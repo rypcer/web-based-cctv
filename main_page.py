@@ -5,7 +5,8 @@ import cv2
 import sys
 from flask_wtf import FlaskForm
 from wtforms import SubmitField, StringField
-
+from wtforms.validators import DataRequired
+import os # to delete files
 
 # ====================== Variables ==================
 
@@ -28,7 +29,7 @@ initi = False;
 
 
 class RecordForm(FlaskForm):
-	video_id = StringField()
+	name = StringField(validators=[DataRequired()])
 	submit = SubmitField("Submit")
 
 
@@ -54,7 +55,7 @@ def index():
 		
 	
 	if initi:
-		for i in range(4):
+		for i in range(10):
 			count = Record.query.count() 
 			new_record = Record("Video",count)
 			db.session.add(new_record)
@@ -62,24 +63,43 @@ def index():
 		initi = False
 
 	
-	form = RecordForm()
-	if form.validate_on_submit():
-		print(form.video_id, file=sys.stderr)
+	
 
 
 	records = Record.query.order_by(Record.id.desc()).all()
 	#print("Test: ",current_video, file=sys.stderr)
-	return render_template('index.html',form = form,video_name = current_video, current_video_id=current_video_id, video_format = video_format,records = records )
+	return render_template('index.html',video_name = current_video, current_video_id=current_video_id, video_format = video_format,records = records )
 
 
 @app.route('/delete_video/<video_id>')
 def delete_video(video_id):
 	global current_video
+	# Delete Video from Server
+	if os.path.isfile(f'static/{current_video}.{video_format}'):
+		os.remove(f'static/{current_video}.{video_format}')
+	# Delete From Database
 	video_record = Record.query.get_or_404(video_id)
-	current_video = "data:,"
 	db.session.delete(video_record)
 	db.session.commit()
+	current_video = "data:,"
 	return redirect("/")
+
+@app.route('/rename_video/<video_id>',methods=['POST'])
+def rename_video(video_id):
+	global current_video
+
+	if request.method == "POST":
+		#print(form.name, file=sys.stderr)
+		new_name = request.form["new_video_name"];
+		# Rename Video from Server
+		if os.path.isfile(f'static/{current_video}.{video_format}'):
+			os.rename(f'static/{current_video}.{video_format}',f'static/{new_name}.{video_format}')
+		# Rename From Database
+		video_record = Record.query.get_or_404(video_id)
+		video_record.video_name = new_name
+		db.session.commit()
+		current_video = new_name
+	return redirect('/')
 
 
 # Get videoname from button link

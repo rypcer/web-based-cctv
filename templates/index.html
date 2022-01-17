@@ -11,39 +11,51 @@
     <div id=grad3 >
       <div class="Logo">
         <img id="logoImg" src="{{ url_for('static',filename='logo2.png') }}" alt="logo">
-        <span id="logoname"> CCTV Surveillance</span>
+        <span id="logoname"> CCTV Surveillance <span style="font-size: 0.7em;">- Webcam, IP Cameras & Raspberry PI</span></span>
       </div>
     </div>
 
     <div class="LiveStream">
       <h1>Main Camera</h1>
-      <img src="{{ url_for('liveStream') }}" alt="This is CCTV video">
+      <img width="80%" src="{{ url_for('liveStream') }}" alt="This is CCTV video">
     </div>
 
-    <div class="RecordsList">
+   
+    <div class="VideoPlayer">
+      <h1> Video Playback <span class="subTitle">{%if video_name != 'data:,'%} - {{video_name}}{%endif%}</span> </h1>
+      
+      <video  width="80%" autoplay="autoplay" controls="controls" preload="preload">
+        <source src= "{{ url_for('static', filename=video_name+'.'+video_format) }}#t=0.1" type="video/{{video_format}}"></source>
+      </video> 
+
+      {% if video_name != 'data:,' %}
+        </br></br>
+        <form  action="{{url_for('rename_video',video_id=current_video_id )}}"method="POST">
+          <input class = "InputBox"type="text" name="new_video_name" placeholder="Enter New Name" value="{{video_name}}"/>
+          <input class ="Button" type="submit" name="submit" value="Rename Video"/>
+          <button class ="ButtonDelete"><a href = "{{url_for('delete_video',video_id=current_video_id)}}"> Delete Video </a> </button>
+        </form>
+     
+      {% endif %}
+      
+    </div>
+
+     <div class="RecordsList">
       <h1>Detected Videos</h1>
       {% for record in records%}
-        <div class= "VideoRecord">
-            <a href="{{url_for('play_video',video_name=record.video_name,video_id=record.id)}}">
-              <img src="{{ url_for('get_thumbnail', video_name=record.video_name) }}" alt="videothumbnail">
-              <p class="VideoRecordTitle">{{record.video_name}}</p>
-            </a>
-        </div>
+      <a href="{{url_for('play_video',video_name=record.video_name,video_id=record.id)}}">
+        <button class= "VideoRecord">
+            
+
+            <div class="VideoRecordTitle" >
+             {{record.video_name}}
+            </div>
+            
+        </button>
+        </a>
       {% endfor%}
     </div>
 
-    <div class="VideoPlayer">
-      <h1>Selected Video</h1>
-      {% if video_name != 'data:,' %}
-        <h2>{{video_name}}</h2>
-        <button class ="VideoRecordDelete" ><a href = "{{url_for('delete_video',video_id=current_video_id)}}"> Delete</a> </button> 
-      {% endif %}
-      <video autoplay="autoplay" controls="controls" preload="preload">
-        <source src= "{{ url_for('static', filename=video_name+'.'+video_format) }}#t=0.1" type="video/{{video_format}}"></source>
-      </video> 
-    </div>
-
-    
     
   </body>
 </html>
