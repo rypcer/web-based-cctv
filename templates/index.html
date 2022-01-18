@@ -4,10 +4,13 @@
   <head>
     <title>CCTV Surveillance v1.0</title>
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static',filename='logo2.png') }}">
   </head>
+
+  
+
   <body>
 
-      
     <div id=grad3 >
       <div class="Logo">
         <img id="logoImg" src="{{ url_for('static',filename='logo2.png') }}" alt="logo">
@@ -24,19 +27,27 @@
     <div class="VideoPlayer">
       <h1> Video Playback <span class="subTitle">{%if video_name != 'data:,'%} - {{video_name}}{%endif%}</span> </h1>
       
-      <video  width="80%" autoplay="autoplay" controls="controls" preload="preload">
-        <source src= "{{ url_for('static', filename=video_name+'.'+video_format) }}#t=0.1" type="video/{{video_format}}"></source>
-      </video> 
-
       {% if video_name != 'data:,' %}
+        <video  width="80%" autoplay="autoplay" controls="controls" preload="preload">
+          <source src= "{{ url_for('static', filename=video_name+'.'+video_format) }}#t=0.1" type="video/{{video_format}}"></source>
+        </video> 
         </br></br>
         <form  action="{{url_for('rename_video',video_id=current_video_id )}}"method="POST">
           <input class = "InputBox"type="text" name="new_video_name" placeholder="Enter New Name" value="{{video_name}}"/>
           <input class ="Button" type="submit" name="submit" value="Rename Video"/>
-          <button class ="ButtonDelete"><a href = "{{url_for('delete_video',video_id=current_video_id)}}"> Delete Video </a> </button>
+          <a class ="ButtonDefault" href = "{{url_for('download_video',video_name=video_name,video_format=video_format)}}"> 
+          Download Video </a> 
+          <a class ="ButtonDelete" href = "{{url_for('delete_video',video_id=current_video_id)}}"> Delete Video </a> 
         </form>
-     
       {% endif %}
+
+      {% with messages = get_flashed_messages() %}
+        {% if messages %}
+          {% for message in messages %}
+            <div class="error">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
       
     </div>
 
@@ -45,12 +56,10 @@
       {% for record in records%}
       <a href="{{url_for('play_video',video_name=record.video_name,video_id=record.id)}}">
         <button class= "VideoRecord">
-            
-
+            <img class= "VideoRecordThumbnail" src="{{ url_for('get_thumbnail', video_name=record.video_name) }}" alt="videothumbnail">
             <div class="VideoRecordTitle" >
              {{record.video_name}}
             </div>
-            
         </button>
         </a>
       {% endfor%}
