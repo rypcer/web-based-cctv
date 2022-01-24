@@ -3,9 +3,6 @@ from flask_sqlalchemy import SQLAlchemy
 import datetime 
 import cv2
 import sys
-from flask_wtf import FlaskForm
-from wtforms import SubmitField, StringField
-from wtforms.validators import DataRequired
 import os # to delete files
 
 # ====================== Variables ==================
@@ -19,19 +16,35 @@ db = SQLAlchemy(app)
 
 
 
+# Recorded Output Video 
+output_resolution = (1280,720)
+output_fps = 30
+video_format = 'mp4'
+fourcc = cv2.VideoWriter_fourcc(*'mp4v') #.MP4, .AVI = 'XVID' 
+is_grayscale = True
+recording = False
+output_created = False
+
+# Camera Settings
 # for ip camera use - rtsp://username:password@ip_address:554/user=username_password='password'_channel=channel_number_stream=0.sdp' 
 # for local webcam use cv2.VideoCapture(0)
 camera = cv2.VideoCapture('static/vid.mp4')
-video_format = 'mp4'
-current_video = "data:,";
-current_video_id = -1;
-initi = False;
+live_stream_res = (852,480)
+camera_name = "MainCamera"
+previous_frame = camera.read()[1]
+current_frame = camera.read()[1]
 
+# Other settings
+current_video = "data:,"
+current_video_id = -1
+initi = False
 
-class RecordForm(FlaskForm):
-	name = StringField(validators=[DataRequired()])
-	submit = SubmitField("Submit")
-
+rec_stopped_time = None;
+timestamp = None;
+time_after_record_ended = 5
+timer_started = False
+rec_started = False
+out = None
 
 # ====================== Classes ==================
 
@@ -39,24 +52,110 @@ class Record(db.Model):
 	id = db.Column(db.Integer,primary_key = True)
 	video_name = db.Column(db.String(200),nullable=False)
 
-	def __init__(self, name, count ):
+	def __init__(self, name, count, timestamp):
 		x = datetime.datetime.now()
 		self.video_name = name+str(count)+'_'+str(x.date())+'_'+x.strftime("%H")+'.'+x.strftime("%M")+'.'+x.strftime("%S")
 
 
 # ===================== Functions ====================
 
+def drawTimeStamp(frame,timestamp):
+    cv2.putText(frame, timestamp.strftime("%A %d %B %Y %I:%M:%S%p"), (10, 10),
+        cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 255, 255), 1)
+
+def drawMotionBox(contour,frame):
+    (x, y, w, h) = cv2.boundingRect(contour)
+    cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 0, 255), 1)
+
+def extractContours(contours, area_size=700):
+    # Extracts the bigger white motion detected areas 
+    out_cntrs =[]
+    for contour in contours:
+        if cv2.contourArea(contour) < area_size:        
+            continue
+        else:
+            out_cntrs.append(contour)
+    return out_cntrs
+
+        
+def detectMotionInFrame(prev_frame, cur_frame, thresholdVal = 20):
+    # 1. Calculate Absolute Difference between Foreground & Background
+    # 2. Convert Result To GrayScale
+    # 3. Blur Frame
+    # 4. Remove small blurred blobs from Frame with Dilations
+    diff = cv2.absdiff(prev_frame, cur_frame)
+    #cv2.imshow("feed", diff)
+    gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
+    #cv2.imshow("feed", gray)
+    blur = cv2.GaussianBlur(gray, (5,5), 0)
+    thresh = cv2.threshold(blur, thresholdVal, 255, cv2.THRESH_BINARY)[1]
+    #cv2.imshow("feed", thresh)
+    dilated = cv2.dilate(thresh, None, iterations=3)
+    contours = cv2.findContours(dilated, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)[0]
+    contours = extractContours(contours)
+    if(len(contours)==0):
+        return None
+    return contours
+
+def gen_video_name(name, timestamp):
+    return name+'_'+str(timestamp.date())+'_'+timestamp.strftime("%H")+'.'+timestamp.strftime("%M")+'.'+timestamp.strftime("%S")
+
+def generateOutputVideo():
+    global output_created, out
+    if not output_created:
+        out = cv2.VideoWriter(f"{gen_video_name(camera_name,timestamp)}.{video_format}", fourcc, output_fps, output_resolution,0)
+        output_created = True
+    # Write resized frame to outputVideo
+    out_frame = current_frame.copy()
+    drawTimeStamp(out_frame,timestamp)
+    if is_grayscale:
+        out_frame = cv2.cvtColor(out_frame, cv2.COLOR_BGR2GRAY)
+    out_frame = cv2.resize(out_frame, output_resolution)
+    out.write(out_frame)
+
+def motion_detection():
+	global current_frame, previous_frame, recording, timer_started, rec_stopped_time
+	previous_frame = current_frame
+	
+	current_frame = camera.read()[1]
+	
+				
+	timestamp = datetime.datetime.now()
+	drawTimeStamp(current_frame, timestamp)
+
+	contours = detectMotionInFrame(previous_frame, current_frame)
+	if contours is not None:
+		if recording:
+			timer_started = False
+		else:
+			recording = True
+		for contour in contours:
+			drawMotionBox(contour, previous_frame)
+	elif recording:
+		if timer_started:
+			if time.time() - rec_stopped_time >= time_after_record_ended:
+				recording = False
+				output_created = True
+				out.release()
+		else:
+			timer_started = True
+			rec_stopped_time = time.time()
+	return True
+    #if recording: 
+        #generateOutputVideo()
 
 def gen_frames(): 
-	while True:
-		success, frame = camera.read()  # read the camera frame
-		if not success:
-			break
-		else:
-			ret, buffer = cv2.imencode('.jpg', frame)
-			frame = buffer.tobytes()
-			yield (b'--frame\r\n'
-				b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')  # concat frame one by one and show result
+	global current_frame
+	while True:	
+		camera_working = camera.read()[0]
+		if not camera_working: break;
+		motion_detection()
+			
+		# Convert Frame to jpg format and send it
+		buffer = cv2.imencode('.jpg', previous_frame)[1]
+		img_frame = buffer.tobytes()
+		yield (b'--frame\r\n'
+			b'Content-Type: image/jpeg\r\n\r\n' + img_frame + b'\r\n')  # concat frame one by one and show result
 
 # Generating the thumbnail is slow needs improving
 def gen_thumbnail(video_name): 
@@ -156,6 +255,7 @@ def liveStream():
 	return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 
+# ===================== Main ====================
 
 if __name__ == "__main__":
 	db.create_all()

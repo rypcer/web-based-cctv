@@ -20,7 +20,7 @@
 
     <div class="LiveStream">
       <h1>Main Camera</h1>
-      <img width="80%" src="{{ url_for('liveStream') }}" alt="This is CCTV video">
+      <img width="100%" src="{{ url_for('liveStream') }}" alt="This is CCTV video">
     </div>
 
    
@@ -28,7 +28,7 @@
       <h1> Video Playback <span class="subTitle">{%if video_name != 'data:,'%} - {{video_name}}{%endif%}</span> </h1>
       
       {% if video_name != 'data:,' %}
-        <video  width="80%" autoplay="autoplay" controls="controls" preload="preload">
+        <video  width="100%" autoplay="autoplay" controls="controls" preload="preload">
           <source src= "{{ url_for('static', filename=video_name+'.'+video_format) }}#t=0.1" type="video/{{video_format}}"></source>
         </video> 
         </br></br>
@@ -65,6 +65,8 @@
       {% endfor%}
     </div>
 
-    
   </body>
+  <footer>
+    <p> © CCTV Surveillance v1.0 Alpha, Ajmal-Rypcer</p>
+  </footer>
 </html>

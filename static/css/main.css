@@ -155,7 +155,13 @@ h1 {
 }
 
 
-
+footer > p{
+	position:  absolute;
+	text-align: center;
+	color: grey;
+	bottom: 1%;
+	width: 100%;
+}
 /* Streams */
 .LiveStream{
 
