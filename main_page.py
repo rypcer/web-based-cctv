@@ -1,6 +1,6 @@
 from flask import Flask, render_template, Response,request, redirect,url_for, flash, send_file
 from flask_sqlalchemy import SQLAlchemy
-import datetime 
+import datetime, time 
 import cv2
 import sys
 import os # to delete files
@@ -20,8 +20,8 @@ db = SQLAlchemy(app)
 output_resolution = (1280,720)
 output_fps = 30
 video_format = 'mp4'
-fourcc = cv2.VideoWriter_fourcc(*'mp4v') #.MP4, .AVI = 'XVID' 
-is_grayscale = True
+fourcc = cv2.VideoWriter_fourcc(*"H264") #.MP4, .AVI = 'XVID' 
+is_grayscale = False
 recording = False
 output_created = False
 
@@ -40,21 +40,20 @@ current_video_id = -1
 initi = False
 
 rec_stopped_time = None;
-timestamp = None;
+
 time_after_record_ended = 5
 timer_started = False
 rec_started = False
 out = None
-
+output_done = False
 # ====================== Classes ==================
 
 class Record(db.Model):
 	id = db.Column(db.Integer,primary_key = True)
 	video_name = db.Column(db.String(200),nullable=False)
 
-	def __init__(self, name, count, timestamp):
-		x = datetime.datetime.now()
-		self.video_name = name+str(count)+'_'+str(x.date())+'_'+x.strftime("%H")+'.'+x.strftime("%M")+'.'+x.strftime("%S")
+	def __init__(self, name):
+		self.video_name = name
 
 
 # ===================== Functions ====================
@@ -98,27 +97,35 @@ def detectMotionInFrame(prev_frame, cur_frame, thresholdVal = 20):
     return contours
 
 def gen_video_name(name, timestamp):
-    return name+'_'+str(timestamp.date())+'_'+timestamp.strftime("%H")+'.'+timestamp.strftime("%M")+'.'+timestamp.strftime("%S")
+    return name+'_'+timestamp.strftime("%d-%m-%Y_%H-%M-%S")
 
-def generateOutputVideo():
-    global output_created, out
-    if not output_created:
-        out = cv2.VideoWriter(f"{gen_video_name(camera_name,timestamp)}.{video_format}", fourcc, output_fps, output_resolution,0)
-        output_created = True
+def generateOutputVideo(database, camera_name, timestamp):
+	global output_created, out
+	if not output_created:
+		out = cv2.VideoWriter(f"static/{gen_video_name(camera_name,timestamp)}.{video_format}", fourcc, output_fps, output_resolution,0)
+		output_created = True
+		# Add to Database
+		new_record = Record(gen_video_name(camera_name,timestamp))
+		database.session.add(new_record)
+		database.session.commit()
     # Write resized frame to outputVideo
-    out_frame = current_frame.copy()
-    drawTimeStamp(out_frame,timestamp)
-    if is_grayscale:
-        out_frame = cv2.cvtColor(out_frame, cv2.COLOR_BGR2GRAY)
-    out_frame = cv2.resize(out_frame, output_resolution)
-    out.write(out_frame)
+	out_frame = current_frame.copy()
+
+	drawTimeStamp(out_frame,timestamp)
+	if is_grayscale:
+		out_frame = cv2.cvtColor(out_frame, cv2.COLOR_BGR2GRAY)
+	out_frame = cv2.resize(out_frame, output_resolution)
+	#print(out_frame.shape,file=sys.stderr)
+	out.write(out_frame)
 
 def motion_detection():
 	global current_frame, previous_frame, recording, timer_started, rec_stopped_time
+	
 	previous_frame = current_frame
-	
-	current_frame = camera.read()[1]
-	
+	camera_working, current_frame = camera.read()
+	if not camera_working:
+		out.release()
+		return False 
 				
 	timestamp = datetime.datetime.now()
 	drawTimeStamp(current_frame, timestamp)
@@ -137,19 +144,26 @@ def motion_detection():
 				recording = False
 				output_created = True
 				out.release()
+				print("STOP",file=sys.stderr)
+				
 		else:
 			timer_started = True
 			rec_stopped_time = time.time()
+	
+	if recording: 
+		generateOutputVideo(db,camera_name, timestamp)
 	return True
-    #if recording: 
-        #generateOutputVideo()
-
+@app.route('/gen')
 def gen_frames(): 
-	global current_frame
-	while True:	
-		camera_working = camera.read()[0]
-		if not camera_working: break;
-		motion_detection()
+	global output_done
+	while True:
+
+		#camera_working,frame = camera.read()
+		if not motion_detection():
+			print("WHy",file=sys.stderr)
+			output_done = True
+			return redirect("/")
+
 			
 		# Convert Frame to jpg format and send it
 		buffer = cv2.imencode('.jpg', previous_frame)[1]
@@ -188,12 +202,14 @@ def index():
 		
 	if initi:
 		for i in range(5):
-			count = Record.query.count() 
-			new_record = Record("Video",count)
+			#count = Record.query.count() 
+			new_record = Record(gen_video_name(camera_name,timestamp))
 			db.session.add(new_record)
 		db.session.commit()
 		initi = False
 
+
+	# Get all new records
 	records = Record.query.order_by(Record.id.desc()).all()
 	#print("Test: ",current_video, file=sys.stderr)
 	return render_template('index.html',video_name = current_video, 
