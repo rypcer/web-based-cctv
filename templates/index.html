@@ -22,7 +22,6 @@
       <h1>Main Camera</h1>
       <img width="100%" src="{{ url_for('liveStream') }}" alt="This is CCTV video">
     </div>
-
    
     <div class="VideoPlayer">
       <h1> Video Playback <span class="subTitle">{%if video_name != 'data:,'%} - {{video_name}}{%endif%}</span> </h1>
@@ -31,6 +30,7 @@
         <video  width="100%" autoplay="autoplay" controls="controls" preload="preload">
           <source src= "{{ url_for('static', filename=video_name+'.'+video_format) }}#t=0.1" type="video/{{video_format}}"></source>
         </video> 
+        <!--url_for('vid',video_name='vid')-->
         </br></br>
         <form  action="{{url_for('rename_video',video_id=current_video_id )}}"method="POST">
           <input class = "InputBox"type="text" name="new_video_name" placeholder="Enter New Name" value="{{video_name}}"/>
@@ -64,7 +64,7 @@
         </a>
       {% endfor%}
     </div>
-
+  <script src="{{ url_for('static', filename='js/script.js') }}"></script>
   </body>
   <footer>
     <p> © CCTV Surveillance v1.0 Alpha, Ajmal-Rypcer</p>

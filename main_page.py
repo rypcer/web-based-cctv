@@ -1,19 +1,34 @@
-from flask import Flask, render_template, Response,request, redirect,url_for, flash, send_file
+# Importing is Case sensitive, * means everthing is imported from doc
+# But function vars and classes can be imported seperately aswell by typing their name
+from packages.motionDetectionAlgorithm import *
+from flask import (Flask, render_template, Response,request, 
+redirect,url_for, flash, send_file)
 from flask_sqlalchemy import SQLAlchemy
-import datetime, time 
-import cv2
-import sys
+from flask_mail import Mail, Message
+import sys # Just used for print
 import os # to delete files
+
+
 
 # ====================== Variables ==================
 
-# Create Flask app & Database
+# Create Flask app 
 app = Flask(__name__,static_folder='static')
+
+# DATABASE SETUP
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///recordings.db'
 app.config["SQLAlchemy_TRACK_MODIFICATIONS"] = False
 app.config['SECRET_KEY'] = "LetsGood"
 db = SQLAlchemy(app)
 
+# EMAIL SETUP
+email = os.environ.get('MAIL_USERNAME_FLASK');
+app.config['MAIL_SERVER'] = 'smtp.gmail.com' 
+app.config['MAIL_PORT'] = 465
+app.config['MAIL_USERNAME'] = email
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD_FLASK')
+app.config['MAIL_USE_SSL'] = True
+mail = Mail(app)
 
 
 # Recorded Output Video 
@@ -46,6 +61,8 @@ timer_started = False
 rec_started = False
 out = None
 output_done = False
+
+notification_email = "gandalfmandalf12@gmail.com";
 # ====================== Classes ==================
 
 class Record(db.Model):
@@ -58,46 +75,19 @@ class Record(db.Model):
 
 # ===================== Functions ====================
 
-def drawTimeStamp(frame,timestamp):
-    cv2.putText(frame, timestamp.strftime("%A %d %B %Y %I:%M:%S%p"), (10, 10),
-        cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 255, 255), 1)
 
-def drawMotionBox(contour,frame):
-    (x, y, w, h) = cv2.boundingRect(contour)
-    cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 0, 255), 1)
+def send_mail(image_data, receiver_email):
+	msg = Message("Hello",
+		sender=email,
+		recipients=[f"<{receiver_email}>"])
 
-def extractContours(contours, area_size=700):
-    # Extracts the bigger white motion detected areas 
-    out_cntrs =[]
-    for contour in contours:
-        if cv2.contourArea(contour) < area_size:        
-            continue
-        else:
-            out_cntrs.append(contour)
-    return out_cntrs
-
-        
-def detectMotionInFrame(prev_frame, cur_frame, thresholdVal = 20):
-    # 1. Calculate Absolute Difference between Foreground & Background
-    # 2. Convert Result To GrayScale
-    # 3. Blur Frame
-    # 4. Remove small blurred blobs from Frame with Dilations
-    diff = cv2.absdiff(prev_frame, cur_frame)
-    #cv2.imshow("feed", diff)
-    gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
-    #cv2.imshow("feed", gray)
-    blur = cv2.GaussianBlur(gray, (5,5), 0)
-    thresh = cv2.threshold(blur, thresholdVal, 255, cv2.THRESH_BINARY)[1]
-    #cv2.imshow("feed", thresh)
-    dilated = cv2.dilate(thresh, None, iterations=3)
-    contours = cv2.findContours(dilated, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)[0]
-    contours = extractContours(contours)
-    if(len(contours)==0):
-        return None
-    return contours
-
-def gen_video_name(name, timestamp):
-    return name+'_'+timestamp.strftime("%d-%m-%Y_%H-%M-%S")
+	# Inline thats that the position of attachment should be inside the email, 
+	# header is used to generate id so we can position where we want the img to be
+	# Content-ID is MyImage
+	msg.attach("s.jpeg",'image/jpeg',image_data,'inline',headers=[['Content-ID','<Myimage>'],])
+	# cid: tells that is should use attachement and MyImage is the content ID
+	msg.html = "<h2> Motion Detected </h2> <br> <img src='cid:Myimage' alt='image'/> " 
+	mail.send(msg)
 
 def generateOutputVideo(database, camera_name, timestamp):
 	global output_created, out
@@ -108,6 +98,12 @@ def generateOutputVideo(database, camera_name, timestamp):
 		new_record = Record(gen_video_name(camera_name,timestamp))
 		database.session.add(new_record)
 		database.session.commit()
+
+		buffer = cv2.imencode('.jpg', current_frame)[1]
+		img_frame = buffer.tobytes()
+		#with app.app_context():
+			#send_mail(img_frame, notification_email)
+
     # Write resized frame to outputVideo
 	out_frame = current_frame.copy()
 
@@ -150,8 +146,8 @@ def motion_detection():
 			timer_started = True
 			rec_stopped_time = time.time()
 	
-	if recording: 
-		generateOutputVideo(db,camera_name, timestamp)
+	#if recording:
+		#generateOutputVideo(db,camera_name, timestamp)
 	return True
 @app.route('/gen')
 def gen_frames(): 
@@ -162,7 +158,7 @@ def gen_frames():
 		if not motion_detection():
 			print("WHy",file=sys.stderr)
 			output_done = True
-			return redirect("/")
+			url_for('download_video',video_name=current_video,video_format=video_format)
 
 			
 		# Convert Frame to jpg format and send it
@@ -176,17 +172,16 @@ def gen_thumbnail(video_name):
 	video = cv2.VideoCapture(f'static/{video_name}.mp4')
 	if video.isOpened():
 		video.set(2,0.5); # Set Frame to middle
-		success, frame = video.retrieve()  # read the camera frame
+		frame = video.retrieve()[1]  # read the camera frame
 		video.release()
 		frame = cv2.resize(frame, (52,30))
-		ret, buffer = cv2.imencode('.jpg', frame)
+		buffer = cv2.imencode('.jpg', frame)[1]
 		frame = buffer.tobytes()
 		yield (b'--frame\r\n'
-			b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')  # concat frame one by one and show result
+			b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')  
 	else:
 		video.release()
 		yield(b'--frame\r\n')
-
 
 
 
@@ -199,7 +194,7 @@ def index():
 	global current_video, initi
 	
 	#if "open" in request.form:
-		
+	
 	if initi:
 		for i in range(5):
 			#count = Record.query.count() 
@@ -218,7 +213,6 @@ def index():
 
 @app.route('/download/<video_name>,<video_format>')
 def download_video (video_name,video_format):
-    #For windows you need to use drive name [ex: F:/Example.pdf]
     path = f"static/{video_name}.{video_format}"
     return send_file(path, as_attachment=True)
 
@@ -262,6 +256,13 @@ def play_video(video_name,video_id):
 	current_video_id = video_id
 	return redirect("/")
 
+# A better more safer way of playing video send from directory
+@app.route('/playVid/<video_name>')
+def vid(video_name):
+	path = f"static/{video_name}.{video_format}"
+	return send_file(path)
+
+
 @app.route('/get_thumbnail/<video_name>')
 def get_thumbnail(video_name):
 	return Response(gen_thumbnail(video_name), mimetype='multipart/x-mixed-replace; boundary=frame')
@@ -271,6 +272,10 @@ def liveStream():
 	return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 
+@app.route('/testreload')
+def test_reload():
+	return Response('Hello World')
+	
 # ===================== Main ====================
 
 if __name__ == "__main__":
