@@ -2,7 +2,7 @@
 # But function vars and classes can be imported seperately aswell by typing their name
 from packages.motionDetectionAlgorithm import *
 from flask import (Flask, render_template, Response,request, 
-redirect,url_for, flash, send_file)
+redirect,url_for, flash, send_file, jsonify, after_this_request)
 from flask_sqlalchemy import SQLAlchemy
 from flask_mail import Mail, Message
 import sys # Just used for print
@@ -43,11 +43,15 @@ output_created = False
 # Camera Settings
 # for ip camera use - rtsp://username:password@ip_address:554/user=username_password='password'_channel=channel_number_stream=0.sdp' 
 # for local webcam use cv2.VideoCapture(0)
-camera = cv2.VideoCapture('static/vid.mp4')
+camera = cv2.VideoCapture(0)
+#camera = cv2.VideoCapture('static/vid.mp4')
 live_stream_res = (852,480)
 camera_name = "MainCamera"
-previous_frame = camera.read()[1]
-current_frame = camera.read()[1]
+#previous_frame = camera.read()[1]
+#current_frame = camera.read()[1]
+
+previous_frame = None
+current_frame = None
 
 # Other settings
 current_video = "data:,"
@@ -61,8 +65,10 @@ timer_started = False
 rec_started = False
 out = None
 output_done = False
-
+send_refresh_status = False
 notification_email = "gandalfmandalf12@gmail.com";
+#print(previous_frame.shape)
+
 # ====================== Classes ==================
 
 class Record(db.Model):
@@ -91,18 +97,19 @@ def send_mail(image_data, receiver_email):
 
 def generateOutputVideo(database, camera_name, timestamp):
 	global output_created, out
-	if not output_created:
+	if output_created == False:
 		out = cv2.VideoWriter(f"static/{gen_video_name(camera_name,timestamp)}.{video_format}", fourcc, output_fps, output_resolution,0)
 		output_created = True
+		print("OUTPUT VIDEO CREATED ***************************",file=sys.stderr)
 		# Add to Database
 		new_record = Record(gen_video_name(camera_name,timestamp))
 		database.session.add(new_record)
 		database.session.commit()
-
-		buffer = cv2.imencode('.jpg', current_frame)[1]
+		# Send the email
+		buffer = cv2.imencode('.jpg', current_frame.copy())[1]
 		img_frame = buffer.tobytes()
-		#with app.app_context():
-			#send_mail(img_frame, notification_email)
+		with app.app_context():
+			send_mail(img_frame, notification_email)
 
     # Write resized frame to outputVideo
 	out_frame = current_frame.copy()
@@ -115,12 +122,12 @@ def generateOutputVideo(database, camera_name, timestamp):
 	out.write(out_frame)
 
 def motion_detection():
-	global current_frame, previous_frame, recording, timer_started, rec_stopped_time
+	global current_frame, previous_frame, recording, timer_started, rec_stopped_time, send_refresh_status, output_created
 	
 	previous_frame = current_frame
 	camera_working, current_frame = camera.read()
 	if not camera_working:
-		out.release()
+		#out.release() # Very important Without release recorded footage wont be saved
 		return False 
 				
 	timestamp = datetime.datetime.now()
@@ -132,35 +139,44 @@ def motion_detection():
 			timer_started = False
 		else:
 			recording = True
+			print("START",file=sys.stderr)
 		for contour in contours:
 			drawMotionBox(contour, previous_frame)
 	elif recording:
 		if timer_started:
 			if time.time() - rec_stopped_time >= time_after_record_ended:
 				recording = False
-				output_created = True
-				out.release()
+				output_created = False
+				timer_started = False
+				out.release() # Very important Without release recorded footage wont be saved
 				print("STOP",file=sys.stderr)
-				
+				send_refresh_status = True
 		else:
 			timer_started = True
 			rec_stopped_time = time.time()
 	
-	#if recording:
-		#generateOutputVideo(db,camera_name, timestamp)
+
+	if recording: 
+		generateOutputVideo(db,camera_name, timestamp)
 	return True
-@app.route('/gen')
+
+
 def gen_frames(): 
-	global output_done
+	global output_done, previous_frame, current_frame, initi
+	if not initi:
+		previous_frame = camera.read(0)[1]
+		current_frame = camera.read(0)[1]
+		initi = True
 	while True:
 
 		#camera_working,frame = camera.read()
 		if not motion_detection():
-			print("WHy",file=sys.stderr)
-			output_done = True
-			url_for('download_video',video_name=current_video,video_format=video_format)
+			break;
+			#print("WHy",file=sys.stderr)
+			#output_done = True
+			#url_for('download_video',video_name=current_video,video_format=video_format)
 
-			
+        # previous_frame = camera.read()[1];
 		# Convert Frame to jpg format and send it
 		buffer = cv2.imencode('.jpg', previous_frame)[1]
 		img_frame = buffer.tobytes()
@@ -191,10 +207,18 @@ def gen_thumbnail(video_name):
 # Without methods in paramters, buttons cannot send data to index
 @app.route('/', methods=["POST","GET"])
 def index():
-	global current_video, initi
+	global current_video, initi, send_refresh_status
 	
 	#if "open" in request.form:
+	send_refresh_status = False
 	
+	# Get all new records
+	records = Record.query.order_by(Record.id.desc()).all()
+	#print("Test: ",current_video, file=sys.stderr)
+	return render_template('index.html',video_name = current_video, 
+		current_video_id=current_video_id, video_format = video_format,records = records)
+
+'''
 	if initi:
 		for i in range(5):
 			#count = Record.query.count() 
@@ -202,15 +226,7 @@ def index():
 			db.session.add(new_record)
 		db.session.commit()
 		initi = False
-
-
-	# Get all new records
-	records = Record.query.order_by(Record.id.desc()).all()
-	#print("Test: ",current_video, file=sys.stderr)
-	return render_template('index.html',video_name = current_video, 
-		current_video_id=current_video_id, video_format = video_format,records = records)
-
-
+	'''
 @app.route('/download/<video_name>,<video_format>')
 def download_video (video_name,video_format):
     path = f"static/{video_name}.{video_format}"
@@ -272,9 +288,14 @@ def liveStream():
 	return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 
-@app.route('/testreload')
-def test_reload():
-	return Response('Hello World')
+@app.route('/hello', methods=['GET'])
+def hello():
+    @after_this_request
+    def add_header(response):
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        return response  
+    
+    return jsonify(send_refresh_status) # Send recording Status to client
 	
 # ===================== Main ====================
 
