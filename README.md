@@ -12,8 +12,8 @@ for further proccessing.
 But as a start it is only going to work locally on the server. </br>
 
 Recorded footage can be:
-- Delete 
-- Rename 
+- Deleted 
+- Renamed 
 - Downloaded from the Server
 
 ### <b>Prerequisites</b>
