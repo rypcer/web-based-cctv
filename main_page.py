@@ -316,8 +316,8 @@ def liveStream():
 	return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 
-@app.route('/hello', methods=['GET'])
-def hello():
+@app.route('/refresh_page', methods=['GET'])
+def refresh_page():
     @after_this_request
     def add_header(response):
         response.headers.add('Access-Control-Allow-Origin', '*')

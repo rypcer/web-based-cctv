@@ -1,5 +1,5 @@
-function getHello() {
-    const url = 'http://localhost:5000/hello'
+function doRefresh() {
+    const url = 'http://localhost:5000/refresh_page'
     fetch(url)
     .then(response => response.json())  
     .then(json => {
@@ -9,5 +9,5 @@ function getHello() {
             location.reload();}
     })
 }
-
-setInterval(function() {getHello()}, 1000); 
+// Every 1 second do refresh check
+setInterval(function() {doRefresh()}, 1000); 
