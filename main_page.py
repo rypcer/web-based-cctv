@@ -1,13 +1,13 @@
 # Importing is Case sensitive, * means everthing is imported from doc
 # But function vars and classes can be imported seperately aswell by typing their name
 from packages.motionDetectionAlgorithm import *
+from packages.objectDetectionAlgorithm import *
 from flask import (Flask, render_template, Response,request, 
 redirect,url_for, flash, send_file, jsonify, after_this_request)
 from flask_sqlalchemy import SQLAlchemy
 from flask_mail import Mail, Message
 import sys # Just used for print
 import os # to delete files
-
 
 
 # ====================== Variables ==================
@@ -21,7 +21,10 @@ app.config["SQLAlchemy_TRACK_MODIFICATIONS"] = False
 app.config['SECRET_KEY'] = "LetsGood"
 db = SQLAlchemy(app)
 
-# EMAIL SETUP
+# EMAIL SETUP 
+# Setup the MAIL_USERNAME_FLASK & MAIL_PASSWORD_FLASK in env vars
+# If not setup then live stream will freeze after refresh 
+# when a motion is done recording 
 email = os.environ.get('MAIL_USERNAME_FLASK');
 app.config['MAIL_SERVER'] = 'smtp.gmail.com' 
 app.config['MAIL_PORT'] = 465
@@ -32,7 +35,7 @@ mail = Mail(app)
 
 
 # Recorded Output Video 
-output_resolution = (1280,720)
+output_resolution = (854,480)
 output_fps = 30
 video_format = 'mp4'
 fourcc = cv2.VideoWriter_fourcc(*"H264") #.MP4, .AVI = 'XVID' 
@@ -40,34 +43,33 @@ is_grayscale = False
 recording = False
 output_created = False
 
-# Camera Settings
-# for ip camera use - rtsp://username:password@ip_address:554/user=username_password='password'_channel=channel_number_stream=0.sdp' 
-# for local webcam use cv2.VideoCapture(0)
-camera = cv2.VideoCapture(0)
-#camera = cv2.VideoCapture('static/vid.mp4')
-live_stream_res = (852,480)
-camera_name = "MainCamera"
-#previous_frame = camera.read()[1]
-#current_frame = camera.read()[1]
 
+# Camera Settings
+# for ip camera use - rtsp://username:password@ip_address:554/
+# user=username_password='password'_channel=channel_number_stream=0.sdp' 
+# Get Video Data from WebCam
+#camera = cv2.VideoCapture(0) 
+camera = cv2.VideoCapture('static/vid.mp4')
+live_stream_res = (854,480)
+camera_name = "MainCamera"
 previous_frame = None
 current_frame = None
 
 # Other settings
 current_video = "data:,"
 current_video_id = -1
-initi = False
-
 rec_stopped_time = None;
-
 time_after_record_ended = 5
 timer_started = False
 rec_started = False
 out = None
 output_done = False
 send_refresh_status = False
-notification_email = "gandalfmandalf12@gmail.com";
-#print(previous_frame.shape)
+notification_email = "" 
+is_notified = True
+detect_person = False
+detect_car = False
+
 
 # ====================== Classes ==================
 
@@ -78,6 +80,15 @@ class Record(db.Model):
 	def __init__(self, name):
 		self.video_name = name
 
+class UserConfig(db.Model):
+	id = db.Column(db.Integer,primary_key = True)
+	notification_email = db.Column(db.String(200),nullable=False)
+	is_grayscale = db.Column(db.Boolean)
+	is_notified = db.Column(db.Boolean)
+	detect_person = db.Column(db.Boolean)
+	detect_car = db.Column(db.Boolean)
+	def __init__(self,email):
+		self.notification_email = email 
 
 # ===================== Functions ====================
 
@@ -100,16 +111,16 @@ def generateOutputVideo(database, camera_name, timestamp):
 	if output_created == False:
 		out = cv2.VideoWriter(f"static/{gen_video_name(camera_name,timestamp)}.{video_format}", fourcc, output_fps, output_resolution,0)
 		output_created = True
-		print("OUTPUT VIDEO CREATED ***************************",file=sys.stderr)
 		# Add to Database
 		new_record = Record(gen_video_name(camera_name,timestamp))
 		database.session.add(new_record)
 		database.session.commit()
 		# Send the email
-		buffer = cv2.imencode('.jpg', current_frame.copy())[1]
+		buffer = cv2.imencode('.jpg', cv2.resize(current_frame.copy(),(854,480)))[1]
 		img_frame = buffer.tobytes()
-		with app.app_context():
-			send_mail(img_frame, notification_email)
+		if is_notified:
+			with app.app_context():
+				send_mail(img_frame, notification_email)
 
     # Write resized frame to outputVideo
 	out_frame = current_frame.copy()
@@ -118,30 +129,43 @@ def generateOutputVideo(database, camera_name, timestamp):
 	if is_grayscale:
 		out_frame = cv2.cvtColor(out_frame, cv2.COLOR_BGR2GRAY)
 	out_frame = cv2.resize(out_frame, output_resolution)
-	#print(out_frame.shape,file=sys.stderr)
 	out.write(out_frame)
+
 
 def motion_detection():
 	global current_frame, previous_frame, recording, timer_started, rec_stopped_time, send_refresh_status, output_created
 	
 	previous_frame = current_frame
 	camera_working, current_frame = camera.read()
+	#current_frame = cv2.resize(current_frame,live_stream_res)
 	if not camera_working:
-		#out.release() # Very important Without release recorded footage wont be saved
+		out.release() # Very important Without release recorded footage wont be saved
 		return False 
 				
 	timestamp = datetime.datetime.now()
 	drawTimeStamp(current_frame, timestamp)
+	# 7,15 are indices of classes array
+	detected = False
+	if detect_person and detect_car:
+		detected = object_detection(previous_frame,current_frame,(7,15)) 
+	elif detect_car:
+		detected = object_detection(previous_frame,current_frame,(7,))
+	elif detect_person:
+		detected = object_detection(previous_frame,current_frame,(15,))
+	else:
+		contours = detectMotionInFrame(previous_frame, current_frame)
+		detected = (0,1)[contours is not None]
 
-	contours = detectMotionInFrame(previous_frame, current_frame)
-	if contours is not None:
+	if detected:
 		if recording:
 			timer_started = False
 		else:
 			recording = True
 			print("START",file=sys.stderr)
-		for contour in contours:
-			drawMotionBox(contour, previous_frame)
+		if not detect_person or detect_car:
+			for contour in contours:
+				drawMotionBox(contour, previous_frame)
+
 	elif recording:
 		if timer_started:
 			if time.time() - rec_stopped_time >= time_after_record_ended:
@@ -163,20 +187,10 @@ def motion_detection():
 
 def gen_frames(): 
 	global output_done, previous_frame, current_frame, initi
-	if not initi:
-		previous_frame = camera.read(0)[1]
-		current_frame = camera.read(0)[1]
-		initi = True
+
 	while True:
-
-		#camera_working,frame = camera.read()
 		if not motion_detection():
-			break;
-			#print("WHy",file=sys.stderr)
-			#output_done = True
-			#url_for('download_video',video_name=current_video,video_format=video_format)
-
-        # previous_frame = camera.read()[1];
+			break
 		# Convert Frame to jpg format and send it
 		buffer = cv2.imencode('.jpg', previous_frame)[1]
 		img_frame = buffer.tobytes()
@@ -199,34 +213,27 @@ def gen_thumbnail(video_name):
 		video.release()
 		yield(b'--frame\r\n')
 
+def checkBoxValue(checkbox):
+	return (0,1)[request.form.get(checkbox)=="on"] 
 
 
 # ===================== Routes ====================
-
 
 # Without methods in paramters, buttons cannot send data to index
 @app.route('/', methods=["POST","GET"])
 def index():
 	global current_video, initi, send_refresh_status
-	
-	#if "open" in request.form:
+
 	send_refresh_status = False
 	
 	# Get all new records
 	records = Record.query.order_by(Record.id.desc()).all()
 	#print("Test: ",current_video, file=sys.stderr)
 	return render_template('index.html',video_name = current_video, 
-		current_video_id=current_video_id, video_format = video_format,records = records)
+		current_video_id=current_video_id, video_format = video_format,records = records,
+		notification_email= notification_email, isGrayScale = is_grayscale, isNotified = is_notified,
+		detect_person=detect_person, detect_car=detect_car)
 
-'''
-	if initi:
-		for i in range(5):
-			#count = Record.query.count() 
-			new_record = Record(gen_video_name(camera_name,timestamp))
-			db.session.add(new_record)
-		db.session.commit()
-		initi = False
-	'''
 @app.route('/download/<video_name>,<video_format>')
 def download_video (video_name,video_format):
     path = f"static/{video_name}.{video_format}"
@@ -261,6 +268,27 @@ def rename_video(video_id):
 		video_record.video_name = new_name
 		db.session.commit()
 		current_video = new_name
+	return redirect('/')
+
+
+@app.route('/update_config/', methods=['POST'])
+def update_config():
+	global is_grayscale, notification_email, is_notified, detect_person, detect_car
+	
+	if request.method == "POST":
+		notification_email = request.form["new_email"]
+		is_grayscale = checkBoxValue("is_greyscale")
+		is_notified = checkBoxValue("is_notified")
+		detect_person = checkBoxValue("detect_person")
+		detect_car = checkBoxValue("detect_car")
+		# Update in Database
+		UserCfg = UserConfig.query.get(1)
+		UserCfg.notification_email = notification_email
+		UserCfg.is_grayscale = is_grayscale
+		UserCfg.is_notified = is_notified
+		UserCfg.detect_person = detect_person
+		UserCfg.detect_car = detect_car
+		db.session.commit()
 	return redirect('/')
 
 
@@ -300,5 +328,21 @@ def hello():
 # ===================== Main ====================
 
 if __name__ == "__main__":
-	db.create_all()
+	db.create_all() # Creates all tables for the DB classes
+	if db.session.query(UserConfig.notification_email).count() == 0:
+		userConfig = UserConfig("")
+		db.session.add(userConfig)
+		db.session.commit()
+	# Initialize the Settings from DB
+	UserCfg = UserConfig.query.get(1)
+	notification_email = UserCfg.notification_email
+	is_grayscale = UserCfg.is_grayscale
+	detect_person = UserCfg.detect_person
+	detect_car = UserCfg.detect_car
+	is_notified = UserCfg.is_notified
+	# Init First Frames
+	#previous_frame = cv2.resize(camera.read(0)[1],live_stream_res)
+	#current_frame = previous_frame
+	previous_frame = camera.read(0)[1]
+	current_frame = previous_frame
 	app.run(debug=True)

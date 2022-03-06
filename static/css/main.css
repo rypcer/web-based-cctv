@@ -154,7 +154,14 @@ h1 {
 	color: #030303;
 }
 
+h4{
+	margin-block-end: 0em;
 
+}
+.checky{
+  height: 17px;
+  width: 17px;
+}
 footer > p{
 	position:  absolute;
 	text-align: center;

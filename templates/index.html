@@ -14,13 +14,46 @@
     <div id=grad3 >
       <div class="Logo">
         <img id="logoImg" src="{{ url_for('static',filename='logo2.png') }}" alt="logo">
-        <span id="logoname"> CCTV Surveillance <span style="font-size: 0.7em;">- Webcam, IP Cameras & Raspberry PI</span></span>
+        <span id="logoname"> CCTV Surveillance <span style="font-size: 0.7em;">- Webcam </span></span>
       </div>
     </div>
 
     <div class="LiveStream">
       <h1>Main Camera</h1>
       <img width="100%" src="{{ url_for('liveStream') }}" alt="This is CCTV video">
+      <br><br>
+      <h3>Settings</h3>
+      <form action="{{url_for('update_config')}}"method="POST">
+        <input class = "InputBox" type="email" name="new_email" placeholder="Enter Email for Notification" value="{{notification_email}}"/>  
+        <br>
+        {% if isGrayScale %}
+        <input class="checky" type="checkbox" name="is_greyscale" checked >
+        {% else %}
+        <input class="checky" type="checkbox" name="is_greyscale" >
+        {% endif %}
+        <label for="is_greyscale">Record in Grayscale</label>
+        <br>
+        {% if isNotified %}
+        <input class="checky" type="checkbox" name="is_notified" checked >
+        {% else %}
+        <input class="checky" type="checkbox" name="is_notified" >
+        {% endif %}
+        <label for="is_notified">Send Notification Email</label>
+        <br>
+        <h4>Object Detection</h4>
+        {% if detect_car %}
+        <input class="checky" type="checkbox" name="detect_car" checked> Car </input>
+        {% else %}
+        <input class="checky" type="checkbox" name="detect_car" > Car </input>
+        {% endif %}
+        {% if detect_person %}
+        <input class="checky" type="checkbox" name="detect_person" checked> Person </input>
+        {% else %}
+        <input class="checky" type="checkbox" name="detect_person" > Person </input>
+        {% endif %}
+        <br><br>
+        <input class ="Button" type="submit" name="submit" value="Save Settings"/>
+      </form>
     </div>
    
     <div class="VideoPlayer">
