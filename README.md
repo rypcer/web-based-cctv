@@ -18,7 +18,8 @@ Recorded footage can be:
 
 ### <b>Prerequisites</b>
 
-Versions: Flask 2.0.2, Python 3.6 or higher, OpenCV 4.5.4, Numpy 1.21.2, SQLAlchemy 1.4.29
+Versions: Flask 2.0.2, Python 3.6 or higher, OpenCV 4.5.4, Numpy 1.21.2, 
+Flask-SQLAlchemy 1.4.29, Flask-Mail 0.9.1
 
 First install python then install these packages by typing  </br>
 them in the bash command line or windows terminal
@@ -29,3 +30,4 @@ Commands:
 - pip install numpy
 - pip install opencv-contrib-python
 - pip install Flask-SQLAlchemy
+- pip install Flask-Mail
