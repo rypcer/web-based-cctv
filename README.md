@@ -28,3 +28,4 @@ Commands:
 - pip install flask
 - pip install numpy
 - pip install opencv-contrib-python
+- pip install Flask-SQLAlchemy
