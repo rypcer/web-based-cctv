@@ -1,4 +1,4 @@
-# Web-Based CCTV Surveillance with Motion Detection
+# Web-Based CCTV Surveillance with Motion and Object Detection
 
 ### <b>Introduction</b>
 
@@ -18,7 +18,8 @@ Recorded footage can be:
 
 ### <b>Prerequisites</b>
 
-Versions: Flask 2.0.2, Python 3.6 or higher, OpenCV 4.5.4, Numpy 1.21.2
+Versions: Flask 2.0.2, Python 3.6 or higher, OpenCV 4.5.4, Numpy 1.21.2, 
+Flask-SQLAlchemy 1.4.29, Flask-Mail 0.9.1
 
 First install python then install these packages by typing  </br>
 them in the bash command line or windows terminal
@@ -28,3 +29,10 @@ Commands:
 - pip install flask
 - pip install numpy
 - pip install opencv-contrib-python
+- pip install Flask-SQLAlchemy
+- pip install Flask-Mail
+
+An example of the website:
+![image](https://user-images.githubusercontent.com/64012474/158781704-4ab95d4d-cdce-446b-8f76-9fc90a91fbad.png)
+
+
