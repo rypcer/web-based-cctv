@@ -1,4 +1,4 @@
-# Web-Based CCTV Surveillance with Motion Detection
+# Web-Based CCTV Surveillance with Motion and Object Detection
 
 ### <b>Introduction</b>
 
