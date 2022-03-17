@@ -31,3 +31,8 @@ Commands:
 - pip install opencv-contrib-python
 - pip install Flask-SQLAlchemy
 - pip install Flask-Mail
+
+An example of the website:
+![image](https://user-images.githubusercontent.com/64012474/158781704-4ab95d4d-cdce-446b-8f76-9fc90a91fbad.png)
+
+
