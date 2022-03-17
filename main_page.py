@@ -42,14 +42,15 @@ fourcc = cv2.VideoWriter_fourcc(*"H264") #.MP4, .AVI = 'XVID'
 is_grayscale = False
 recording = False
 output_created = False
-
+initFrames = True
 
 # Camera Settings
 # for ip camera use - rtsp://username:password@ip_address:554/
 # user=username_password='password'_channel=channel_number_stream=0.sdp' 
 # Get Video Data from WebCam
 camera = cv2.VideoCapture(0) 
-#camera = cv2.VideoCapture('static/vid.mp4')
+
+#camera = cv2.VideoCapture('static/testdata/vid.mp4')
 live_stream_res = (854,480)
 camera_name = "MainCamera"
 previous_frame = None
@@ -186,16 +187,22 @@ def motion_detection():
 
 
 def gen_frames(): 
-	global output_done, previous_frame, current_frame, initi
-
+	global output_done, previous_frame, current_frame, initFrames
+	if initFrames:	
+		previous_frame = camera.read(0)[1]
+		current_frame = previous_frame
+		initFrames = False
+	print("WHILE TRUE***************************************************************************")
 	while True:
+		
 		if not motion_detection():
 			break
 		# Convert Frame to jpg format and send it
 		buffer = cv2.imencode('.jpg', previous_frame)[1]
 		img_frame = buffer.tobytes()
+		# yield returns value but doesnt exit the function so new frames can be received
 		yield (b'--frame\r\n'
-			b'Content-Type: image/jpeg\r\n\r\n' + img_frame + b'\r\n')  # concat frame one by one and show result
+			b'Content-Type: image/jpeg\r\n\r\n' + img_frame + b'\r\n') # starts from
 
 # Generating the thumbnail is slow needs improving
 def gen_thumbnail(video_name): 
@@ -343,6 +350,7 @@ if __name__ == "__main__":
 	# Init First Frames
 	#previous_frame = cv2.resize(camera.read(0)[1],live_stream_res)
 	#current_frame = previous_frame
-	previous_frame = camera.read(0)[1]
-	current_frame = previous_frame
+	#camera = cv2.VideoCapture(0) 
+	#previous_frame = camera.read(0)[1]
+	#current_frame = previous_frame
 	app.run(debug=True)
