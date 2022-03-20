@@ -48,7 +48,7 @@ initFrames = True
 # for ip camera use - rtsp://username:password@ip_address:554/
 # user=username_password='password'_channel=channel_number_stream=0.sdp' 
 # Get Video Data from WebCam
-camera = cv2.VideoCapture(0) 
+#camera = cv2.VideoCapture(0) 
 
 #camera = cv2.VideoCapture('static/testdata/vid.mp4')
 live_stream_res = (854,480)

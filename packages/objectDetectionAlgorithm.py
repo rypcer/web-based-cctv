@@ -8,7 +8,7 @@ COLORS = np.random.uniform(0, 255, size=(len(CLASSES), 3)) # len(classes)*3; 3 m
 net = cv2.dnn.readNetFromCaffe("packages/MobileNetSSD_deploy.prototxt.txt",
  "packages/MobileNetSSD_deploy.caffemodel")
 min_conf_threshold = 0.3
-blob_res = (1000, 1000)
+blob_res = (200, 200)
 
 def object_detection(previous_frame,current_frame,classesToLookFor):
 
